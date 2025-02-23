@@ -30,4 +30,4 @@ if __name__ == "__main__":
         time.sleep(0.2)
         lcd.fill_rectangle(0, 212, 240, 320, Colors.RED)  # Fill a rectangle with blue
         time.sleep(0.5)
-        lcd.cleanup()
+        # lcd.cleanup()
