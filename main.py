@@ -1,0 +1,29 @@
+from lcd_driver import LCDDriver
+from const import ILI9340, Colors
+from gpio_handler import GPIOHandler
+from spi_handler import SPIHandler
+import time
+
+# Main
+if __name__ == "__main__":
+    # Initialize GPIO and SPI
+
+    gpio = GPIOHandler()
+    spi = SPIHandler()
+    lcd = LCDDriver(
+        gpio_handler=gpio, spi_handler=spi, commands=ILI9340, width=240, height=320
+    )
+    lcd.init_display()
+
+    # TRY DIFFERENT PIXEL FORMATS
+    lcd.send_command(ILI9340.CMD_COLMOD)
+    lcd.send_data(0x55)  # Try 0x56 if 0x55 does not work
+
+    # TRY DIFFERENT ROTATION VALUES
+    lcd.send_command(ILI9340.CMD_MADCTL)
+    lcd.send_data(0x00)  # Try other values like 0x08, 0xC8, 0x48
+
+    lcd.fill_screen(Colors.GREEN)  # Test with a different red format
+    time.sleep(1)
+    lcd.fill_rectangle(70, 110, 190, 230, Colors.RED)  # Fill a rectangle with red
+    lcd.cleanup()

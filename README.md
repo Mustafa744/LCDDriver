@@ -1,0 +1,1 @@
+A project dedicated to developing a standalone driver for the Waveshare SPI touchscreen.
