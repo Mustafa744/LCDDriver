@@ -101,6 +101,7 @@ class LCDDriver:
             self.send_data(pixel_data[i : i + chunk_size])
 
     def plot_image(self, x0, y0, x1, y1, image_path):
+        print("Plotting image...")
         # Open the image file
         image = Image.open(image_path)
         image = image.convert("RGB")  # Ensure image is in RGB format
@@ -122,6 +123,7 @@ class LCDDriver:
         chunk_size = 4096
         for i in range(0, len(pixel_data), chunk_size):
             self.send_data(pixel_data[i : i + chunk_size])
+        print("Image plotted successfully!")
 
     def cleanup(self):
         self.spi.close()
