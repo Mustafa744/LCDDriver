@@ -2,6 +2,7 @@ import time
 from spi_handler import SPIHandler
 from gpio_handler import GPIOHandler
 from PIL import Image
+import numpy as np
 import RPi.GPIO as GPIO
 
 
@@ -109,13 +110,16 @@ class LCDDriver:
         # Resize the image to fit the specified window
         image = image.resize((x1 - x0 + 1, y1 - y0 + 1))
 
+        # Rotate the image 180 degrees
+        image = image.rotate(180)
+
         # Convert image to pixel data
-        pixel_data = []
-        for y in range(image.height):
-            for x in range(image.width):
-                r, g, b = image.getpixel((x, y))
-                pixel_data.append((r & 0xF8) | (g >> 5))
-                pixel_data.append(((g & 0x1C) << 3) | (b >> 3))
+        pixel_data = np.array(image)
+        pixel_data = ((pixel_data[:, :, 0] & 0xF8) | (pixel_data[:, :, 1] >> 5)).astype(
+            np.uint8
+        ).tolist() + (
+            ((pixel_data[:, :, 1] & 0x1C) << 3) | (pixel_data[:, :, 2] >> 3)
+        ).astype(np.uint8).tolist()
 
         self.set_address_window(x0, y0, x1, y1)
 
