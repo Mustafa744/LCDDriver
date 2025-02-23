@@ -115,11 +115,11 @@ class LCDDriver:
 
         # Convert image to pixel data
         pixel_data = np.array(image)
-        pixel_data = ((pixel_data[:, :, 0] & 0xF8) | (pixel_data[:, :, 1] >> 5)).astype(
-            np.uint8
-        ).tolist() + (
-            ((pixel_data[:, :, 1] & 0x1C) << 3) | (pixel_data[:, :, 2] >> 3)
-        ).astype(np.uint8).tolist()
+        r = (pixel_data[:, :, 0] & 0xF8) >> 3
+        g = (pixel_data[:, :, 1] & 0xFC) >> 2
+        b = (pixel_data[:, :, 2] & 0xF8) >> 3
+        rgb565 = (r << 11) | (g << 5) | b
+        pixel_data = rgb565.flatten().tolist()
 
         self.set_address_window(x0, y0, x1, y1)
 
