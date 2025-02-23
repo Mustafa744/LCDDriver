@@ -1,6 +1,7 @@
 import time
 from spi_handler import SPIHandler
 from gpio_handler import GPIOHandler
+from PIL import Image
 import RPi.GPIO as GPIO
 
 
@@ -93,6 +94,29 @@ class LCDDriver:
         width = x1 - x0 + 1
         height = y1 - y0 + 1
         pixel_data = [color >> 8, color & 0xFF] * (width * height)
+
+        # Send pixel data in chunks (SPI buffer limit)
+        chunk_size = 4096
+        for i in range(0, len(pixel_data), chunk_size):
+            self.send_data(pixel_data[i : i + chunk_size])
+
+    def plot_image(self, x0, y0, x1, y1, image_path):
+        # Open the image file
+        image = Image.open(image_path)
+        image = image.convert("RGB")  # Ensure image is in RGB format
+
+        # Resize the image to fit the specified window
+        image = image.resize((x1 - x0 + 1, y1 - y0 + 1))
+
+        # Convert image to pixel data
+        pixel_data = []
+        for y in range(image.height):
+            for x in range(image.width):
+                r, g, b = image.getpixel((x, y))
+                pixel_data.append((r & 0xF8) | (g >> 5))
+                pixel_data.append(((g & 0x1C) << 3) | (b >> 3))
+
+        self.set_address_window(x0, y0, x1, y1)
 
         # Send pixel data in chunks (SPI buffer limit)
         chunk_size = 4096

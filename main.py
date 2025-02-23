@@ -23,11 +23,16 @@ if __name__ == "__main__":
         # TRY DIFFERENT ROTATION VALUES
         lcd.send_command(ILI9340.CMD_MADCTL)
         lcd.send_data(0x00)  # Try other values like 0x08, 0xC8, 0x48
-        # draw france flag
-        lcd.fill_screen(Colors.WHITE)  # Test with a different red format
-        time.sleep(0.2)
-        lcd.fill_rectangle(0, 0, 240, 106, Colors.BLUE)  # Fill a rectangle with blue
-        time.sleep(0.2)
-        lcd.fill_rectangle(0, 212, 240, 320, Colors.RED)  # Fill a rectangle with blue
-        time.sleep(0.5)
+
+        # # draw france flag
+        # lcd.fill_screen(Colors.WHITE)  # Test with a different red format
+        # time.sleep(0.2)
+        # lcd.fill_rectangle(0, 0, 240, 106, Colors.BLUE)  # Fill a rectangle with blue
+        # time.sleep(0.2)
+        # lcd.fill_rectangle(0, 212, 240, 320, Colors.RED)  # Fill a rectangle with blue
+        # time.sleep(0.5)
+
+        # plot the image
+        lcd.fill_screen(Colors.WHITE)
+        lcd.plot_image(0, 0, 240, 240, "shakal.jpg")
         # lcd.cleanup()
