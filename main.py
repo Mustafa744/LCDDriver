@@ -9,7 +9,7 @@ if __name__ == "__main__":
     # Initialize GPIO and SPI
 
     gpio = GPIOHandler()
-    spi = SPIHandler()
+    spi = SPIHandler(speed=32000000)
     lcd = LCDDriver(
         gpio_handler=gpio, spi_handler=spi, commands=ILI9340, width=240, height=320
     )
