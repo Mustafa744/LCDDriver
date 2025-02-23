@@ -20,6 +20,8 @@ class XPT2046:
         self.cal_y = cal_y
         self.offset_x = offset_x
         self.offset_y = offset_y
+        # setup pins
+        GPIO.setmode(GPIO.BCM)
 
         # Setup chip-select pin
         GPIO.setup(self.cs_pin, GPIO.OUT)

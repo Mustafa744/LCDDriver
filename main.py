@@ -14,7 +14,7 @@ if __name__ == "__main__":
     lcd = LCDDriver(
         gpio_handler=gpio, spi_handler=spi, commands=ILI9340, width=240, height=320
     )
-    touch = XPT2046(spi, 22, 27)
+    touch = XPT2046(spi, cs_pin=7, irq_pin=17)
     lcd.init_display()
 
     # TRY DIFFERENT PIXEL FORMATS
@@ -36,8 +36,8 @@ if __name__ == "__main__":
     # plot the image
     lcd.fill_screen(Colors.WHITE)
     lcd.plot_image(0, 0, 239, 320, "shakal.jpg")
-    while True:
-        touch_val = touch.get_touch()
-        if touch_val is not None:
-            print(touch_val)
+    # while True:
+    #     touch_val = touch.get_touch()
+    #     if touch_val is not None:
+    #         print(touch_val)
     # lcd.cleanup()
