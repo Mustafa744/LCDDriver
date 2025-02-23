@@ -6,6 +6,11 @@ import numpy as np
 import RPi.GPIO as GPIO
 
 
+def rgb2RGB565(r, g, b):
+    # Swap the red and blue channels for the conversion.
+    return ((b & 0xF8) << 8) | ((g & 0xFC) << 3) | (r >> 3)
+
+
 class LCDDriver:
     def __init__(
         self,
@@ -82,12 +87,21 @@ class LCDDriver:
     def fill_screen(self, color):
         self.set_address_window(0, 0, self.width - 1, self.height - 1)
 
-        pixel_data = [color >> 8, color & 0xFF] * (self.width * self.height)
+        n_pixels = self.width * self.height
+        high_byte = (color >> 8) & 0xFF
+        low_byte = color & 0xFF
+
+        # Create a NumPy array with interleaved high and low bytes
+        pixel_bytes = np.empty(n_pixels * 2, dtype=np.uint8)
+        pixel_bytes[0::2] = high_byte
+        pixel_bytes[1::2] = low_byte
+
+        data_list = pixel_bytes.tolist()
 
         # Send pixel data in chunks (SPI buffer limit)
         chunk_size = 4096
-        for i in range(0, len(pixel_data), chunk_size):
-            self.send_data(pixel_data[i : i + chunk_size])
+        for i in range(0, len(data_list), chunk_size):
+            self.send_data(data_list[i : i + chunk_size])
 
     def fill_rectangle(self, x0, y0, x1, y1, color):
         self.set_address_window(x0, y0, x1, y1)
@@ -103,9 +117,8 @@ class LCDDriver:
 
     def plot_image(self, x0, y0, x1, y1, image_path):
         print("Plotting image...")
-        # Open the image file
-        image = Image.open(image_path)
-        image = image.convert("RGB")  # Ensure image is in RGB format
+        # Open the image and convert to RGB
+        image = Image.open(image_path).convert("RGB")
 
         # Resize the image to fit the specified window
         image = image.resize((x1 - x0 + 1, y1 - y0 + 1))
@@ -113,20 +126,37 @@ class LCDDriver:
         # Rotate the image 180 degrees
         image = image.rotate(180)
 
-        # Convert image to pixel data
+        # Convert image to a NumPy array
         pixel_data = np.array(image)
-        r = (pixel_data[:, :, 0] & 0xF8) >> 3
-        g = (pixel_data[:, :, 1] & 0xFC) >> 2
-        b = (pixel_data[:, :, 2] & 0xF8) >> 3
-        rgb565 = (r << 11) | (g << 5) | b
-        pixel_data = rgb565.flatten().tolist()
+
+        # Vectorized conversion to RGB565 with swapped red and blue channels:
+        # (r, g, b) -> ((b & 0xF8) << 8) | ((g & 0xFC) << 3) | (r >> 3)
+        r = pixel_data[:, :, 0]
+        g = pixel_data[:, :, 1]
+        b = pixel_data[:, :, 2]
+        rgb565 = (
+            (((b & 0xF8).astype(np.uint16)) << 8)
+            | (((g & 0xFC).astype(np.uint16)) << 3)
+            | ((r >> 3).astype(np.uint16))
+        )
+
+        # Split the 16-bit RGB565 value into high and low bytes
+        high_bytes = (rgb565 >> 8) & 0xFF
+        low_bytes = rgb565 & 0xFF
+
+        # Interleave the high and low bytes
+        pixel_bytes = np.empty(rgb565.size * 2, dtype=np.uint8)
+        pixel_bytes[0::2] = high_bytes.flatten()
+        pixel_bytes[1::2] = low_bytes.flatten()
+        data_list = pixel_bytes.tolist()
 
         self.set_address_window(x0, y0, x1, y1)
 
-        # Send pixel data in chunks (SPI buffer limit)
+        # Send the data in chunks (SPI buffer limit)
         chunk_size = 4096
-        for i in range(0, len(pixel_data), chunk_size):
-            self.send_data(pixel_data[i : i + chunk_size])
+        for i in range(0, len(data_list), chunk_size):
+            self.send_data(data_list[i : i + chunk_size])
+
         print("Image plotted successfully!")
 
     def cleanup(self):
