@@ -49,33 +49,33 @@ class LCDDriver:
     def init_display(self):
         self.reset_display()
 
-        self.send_command(self.command.CMD_SWRESET)  # Software Reset
+        self.send_command(self.commands.CMD_SWRESET)  # Software Reset
         time.sleep(0.1)
 
-        self.send_command(self.command.CMD_SLPOUT)  # Sleep Out
+        self.send_command(self.commands.CMD_SLPOUT)  # Sleep Out
         time.sleep(0.1)
 
         self.send_command(
-            self.command.CMD_COLMOD
+            self.commands.CMD_COLMOD
         )  # Set Pixel Format to 16-bit (BGR565)
         self.send_data(0x56)  # Use 0x56 for BGR565 instead of 0x55
 
         self.send_command(
-            self.command.CMD_MADCTL
+            self.commands.CMD_MADCTL
         )  # Memory Access Control (Rotation Fix)
         self.send_data(0xC0)  # Corrected orientation
 
-        self.send_command(self.command.CMD_DISPON)  # Display On
+        self.send_command(self.commands.CMD_DISPON)  # Display On
         time.sleep(0.1)
 
     def set_address_window(self, x0, y0, x1, y1):
-        self.send_command(self.command.CMD_CASET)  # Column Address Set
+        self.send_command(self.commands.CMD_CASET)  # Column Address Set
         self.send_data([x0 >> 8, x0 & 0xFF, x1 >> 8, x1 & 0xFF])
 
-        self.send_command(self.command.CMD_RASET)  # Row Address Set
+        self.send_command(self.commands.CMD_RASET)  # Row Address Set
         self.send_data([y0 >> 8, y0 & 0xFF, y1 >> 8, y1 & 0xFF])
 
-        self.send_command(self.command.CMD_RAMWR)  # Prepare for pixel data
+        self.send_command(self.commands.CMD_RAMWR)  # Prepare for pixel data
 
     def fill_screen(self, color):
         self.set_address_window(0, 0, self.width - 1, self.height - 1)
