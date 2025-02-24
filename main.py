@@ -15,15 +15,15 @@ if __name__ == "__main__":
         gpio_handler=gpio, spi_handler=spi, commands=ILI9340, width=240, height=320
     )
     touch = XPT2046(tp_cs=26, spi=spi)
-    lcd.init_display()
+    # lcd.init_display()
 
-    # TRY DIFFERENT PIXEL FORMATS
-    lcd.send_command(ILI9340.CMD_COLMOD)
-    lcd.send_data(0x55)  # Try 0x56 if 0x55 does not work
+    # # TRY DIFFERENT PIXEL FORMATS
+    # lcd.send_command(ILI9340.CMD_COLMOD)
+    # lcd.send_data(0x55)  # Try 0x56 if 0x55 does not work
 
-    # TRY DIFFERENT ROTATION VALUES
-    lcd.send_command(ILI9340.CMD_MADCTL)
-    lcd.send_data(0x00)  # Try other values like 0x08, 0xC8, 0x48
+    # # TRY DIFFERENT ROTATION VALUES
+    # lcd.send_command(ILI9340.CMD_MADCTL)
+    # lcd.send_data(0x00)  # Try other values like 0x08, 0xC8, 0x48
 
     # # draw france flag
     # lcd.fill_screen(Colors.WHITE)  # Test with a different red format
@@ -34,8 +34,8 @@ if __name__ == "__main__":
     # time.sleep(0.5)
 
     # plot the image
-    lcd.fill_screen(Colors.WHITE)
-    lcd.plot_image(0, 0, 239, 320, "shakal.jpg")
+    # lcd.fill_screen(Colors.WHITE)
+    # lcd.plot_image(0, 0, 239, 320, "shakal.jpg")
     # while True:
     #     touch_val = touch.get_touch()
     #     if touch_val is not None:
