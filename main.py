@@ -14,7 +14,7 @@ if __name__ == "__main__":
     lcd = LCDDriver(
         gpio_handler=gpio, spi_handler=spi, commands=ILI9340, width=240, height=320
     )
-    touch = XPT2046(spi, cs_pin=7, irq_pin=17)
+    touch = XPT2046(tp_cs=26, spi=spi)
     lcd.init_display()
 
     # TRY DIFFERENT PIXEL FORMATS
@@ -41,3 +41,8 @@ if __name__ == "__main__":
     #     if touch_val is not None:
     #         print(touch_val)
     # lcd.cleanup()
+    while True:
+        pos = touch.get_touch_coordinates()
+        if pos:
+            print(f"Touch detected at: {pos}")
+        time.sleep(0.1)
