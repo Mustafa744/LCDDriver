@@ -15,7 +15,7 @@ class XPT2046:
         y_min=300,
         y_max=3800,
     ):
-        self.spi = spi
+        self.spi = spi.spi
         # Configure touch panel chip-select pin
         self.tp_cs = tp_cs
         GPIO.setmode(GPIO.BCM)
