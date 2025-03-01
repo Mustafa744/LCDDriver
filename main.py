@@ -40,7 +40,7 @@ if __name__ == "__main__":
         width=240,
         height=320,
     )
-    touch = XPT2046(tp_cs=26, spi=spi, spi_lock=spi_lock)
+    touch = XPT2046(tp_cs=26, spi=spi)
     lcd.init_display()
 
     display_thread = threading.Thread(target=update_display, args=(lcd,), daemon=True)

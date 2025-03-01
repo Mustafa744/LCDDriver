@@ -15,10 +15,9 @@ class XPT2046:
         x_max=3800,
         y_min=300,
         y_max=3800,
-        spi_lock=None,
     ):
         self.spi = spi.spi
-        self.spi_lock = spi_lock
+        self.spi_lock = self.spi_lock
         self.tp_cs = tp_cs
         GPIO.setmode(GPIO.BCM)
         GPIO.setup(self.tp_cs, GPIO.OUT)
