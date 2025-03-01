@@ -1,9 +1,11 @@
+# Python
 import time
 from spi_handler import SPIHandler
 from gpio_handler import GPIOHandler
 from PIL import Image
 import numpy as np
 import RPi.GPIO as GPIO
+from const import ILI9340
 
 
 def rgb2RGB565(r, g, b):
@@ -19,6 +21,7 @@ class LCDDriver:
         commands=None,
         width: int = 240,
         height: int = 320,
+        spi_lock=None,
     ):
         self.width = width
         self.height = height
@@ -26,25 +29,36 @@ class LCDDriver:
         self.spi = spi_handler
         self.gpio = gpio_handler
         self.commands = commands
+        self.spi_lock = spi_lock
         # get gpio pins
         self.LCD_RS = self.gpio.rs_pin
         self.LCD_CS = self.gpio.cs_pin
         self.LCD_RST = self.gpio.rst_pin
 
     def send_command(self, cmd):
-        self.gpio.set_pin(self.LCD_RS, GPIO.LOW)
         self.gpio.set_pin(self.LCD_RS, GPIO.LOW)  # Command Mode
         self.gpio.set_pin(self.LCD_CS, GPIO.LOW)
-        self.spi.transfer([cmd])
+        if self.spi_lock:
+            with self.spi_lock:
+                self.spi.transfer([cmd])
+        else:
+            self.spi.transfer([cmd])
         self.gpio.set_pin(self.LCD_CS, GPIO.HIGH)
 
     def send_data(self, data):
         self.gpio.set_pin(self.LCD_RS, GPIO.HIGH)  # Data Mode
         self.gpio.set_pin(self.LCD_CS, GPIO.LOW)
-        if isinstance(data, list):
-            self.spi.transfer(data)
+        if self.spi_lock:
+            with self.spi_lock:
+                if isinstance(data, list):
+                    self.spi.transfer(data)
+                else:
+                    self.spi.transfer([data])
         else:
-            self.spi.transfer([data])
+            if isinstance(data, list):
+                self.spi.transfer(data)
+            else:
+                self.spi.transfer([data])
         self.gpio.set_pin(self.LCD_CS, GPIO.HIGH)
 
     def reset_display(self):
@@ -65,7 +79,8 @@ class LCDDriver:
         self.send_command(
             self.commands.CMD_COLMOD
         )  # Set Pixel Format to 16-bit (BGR565)
-        self.send_data(0x56)  # Use 0x56 for BGR565 instead of 0x55
+        self.send_data(0x55)  # Use 0x56 for BGR565 instead of 0x55
+        self.send_command(ILI9340.CMD_COLMOD)
 
         self.send_command(
             self.commands.CMD_MADCTL

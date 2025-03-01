@@ -1,48 +1,59 @@
+import threading
+import time
 from lcd_driver import LCDDriver
 from const import ILI9340, Colors
 from gpio_handler import GPIOHandler
 from spi_handler import SPIHandler
 from touch_handler import XPT2046
-import time
 
-# Main
+# Create a global lock for SPI operations
+spi_lock = threading.Lock()
+
+
+def update_display(lcd):
+    while True:
+        with spi_lock:
+            lcd.fill_screen(Colors.RED)
+        time.sleep(0.5)
+        with spi_lock:
+            lcd.fill_screen(Colors.BLUE)
+        time.sleep(0.5)
+
+
+def read_touch(touch):
+    while True:
+        with spi_lock:
+            pos = touch.get_touch_coordinates()
+        if pos:
+            print(f"Touch detected at: {pos}")
+        time.sleep(0.01)
+
+
 if __name__ == "__main__":
-    # Initialize GPIO and SPI
-
     gpio = GPIOHandler()
     spi = SPIHandler(speed=32000000)
     lcd = LCDDriver(
-        gpio_handler=gpio, spi_handler=spi, commands=ILI9340, width=240, height=320
+        gpio_handler=gpio,
+        spi_handler=spi,
+        commands=ILI9340,
+        width=240,
+        height=320,
+        # Passing the SPI lock if needed within the driver
+        spi_lock=spi_lock,
     )
-    touch = XPT2046(tp_cs=26, spi=spi)
-    # lcd.init_display()
+    touch = XPT2046(tp_cs=26, spi=spi, spi_lock=spi_lock)
+    lcd.init_display()
 
-    # # TRY DIFFERENT PIXEL FORMATS
-    # lcd.send_command(ILI9340.CMD_COLMOD)
-    # lcd.send_data(0x55)  # Try 0x56 if 0x55 does not work
+    # Create threads for display update and touch reading
+    display_thread = threading.Thread(target=update_display, args=(lcd,), daemon=True)
+    touch_thread = threading.Thread(target=read_touch, args=(touch,), daemon=True)
 
-    # # TRY DIFFERENT ROTATION VALUES
-    # lcd.send_command(ILI9340.CMD_MADCTL)
-    # lcd.send_data(0x00)  # Try other values like 0x08, 0xC8, 0x48
+    display_thread.start()
+    touch_thread.start()
 
-    # # draw france flag
-    # lcd.fill_screen(Colors.WHITE)  # Test with a different red format
-    # time.sleep(0.2)
-    # lcd.fill_rectangle(0, 0, 240, 106, Colors.BLUE)  # Fill a rectangle with blue
-    # time.sleep(0.2)
-    # lcd.fill_rectangle(0, 212, 240, 320, Colors.RED)  # Fill a rectangle with blue
-    # time.sleep(0.5)
-
-    # plot the image
-    # lcd.fill_screen(Colors.WHITE)
-    # lcd.plot_image(0, 0, 239, 320, "shakal.jpg")
-    # while True:
-    #     touch_val = touch.get_touch()
-    #     if touch_val is not None:
-    #         print(touch_val)
-    # lcd.cleanup()
-    while True:
-        pos = touch.get_touch_coordinates()
-        if pos:
-            print(f"Touch detected at: {pos}")
-        time.sleep(0.1)
+    # Keep the main thread alive.
+    try:
+        while True:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        print("Exiting...")

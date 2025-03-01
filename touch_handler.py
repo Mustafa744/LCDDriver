@@ -1,3 +1,4 @@
+# Python
 import time
 import RPi.GPIO as GPIO
 import spidev
@@ -14,8 +15,10 @@ class XPT2046:
         x_max=3800,
         y_min=300,
         y_max=3800,
+        spi_lock=None,
     ):
         self.spi = spi.spi
+        self.spi_lock = spi_lock
         # Configure touch panel chip-select pin
         self.tp_cs = tp_cs
         GPIO.setmode(GPIO.BCM)
@@ -34,9 +37,13 @@ class XPT2046:
         # Lower chip-select and allow settling time
         GPIO.output(self.tp_cs, GPIO.LOW)
         time.sleep(0.01)
-        # Send command and read 2 bytes of response
-        self.spi.xfer2([command])
-        raw = self.spi.xfer2([0x00, 0x00])
+        if self.spi_lock:
+            with self.spi_lock:
+                self.spi.xfer2([command])
+                raw = self.spi.xfer2([0x00, 0x00])
+        else:
+            self.spi.xfer2([command])
+            raw = self.spi.xfer2([0x00, 0x00])
         GPIO.output(self.tp_cs, GPIO.HIGH)
         # Combine bytes to get 12-bit ADC value
         adc_val = ((raw[0] << 8) | raw[1]) >> 3
