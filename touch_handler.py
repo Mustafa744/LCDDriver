@@ -8,7 +8,7 @@ class XPT2046:
     def __init__(
         self,
         tp_cs=26,
-        spi=None,
+        spi_handler=None,
         screen_width=240,
         screen_height=320,
         x_min=300,
@@ -16,8 +16,8 @@ class XPT2046:
         y_min=300,
         y_max=3800,
     ):
-        self.spi = spi.spi
-        self.spi_lock = self.spi_lock
+        self.spi = spi_handler.spi
+        self.spi_lock = spi_handler.spi_lock
         self.tp_cs = tp_cs
         GPIO.setmode(GPIO.BCM)
         GPIO.setup(self.tp_cs, GPIO.OUT)
