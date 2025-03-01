@@ -56,6 +56,7 @@ class SPIHandler:
         self.spi = spidev.SpiDev()
         self.spi.open(bus, device)
         self.spi.max_speed_hz = speed
+        self.spi_lock = spi_lock
 
     def transfer(self, data):
         self.spi.xfer2(data)
