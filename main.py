@@ -39,7 +39,6 @@ if __name__ == "__main__":
         commands=ILI9340,
         width=240,
         height=320,
-        spi_lock=spi_lock,
     )
     touch = XPT2046(tp_cs=26, spi=spi, spi_lock=spi_lock)
     lcd.init_display()

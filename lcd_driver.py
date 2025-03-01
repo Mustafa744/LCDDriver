@@ -76,8 +76,6 @@ class LCDDriver:
         self.send_command(
             self.commands.CMD_COLMOD
         )  # Set Pixel Format to 16-bit (BGR565)
-        self.send_data(0x55)  # Use 0x56 for BGR565 instead of 0x55
-        self.send_command(ILI9340.CMD_COLMOD)
 
         self.send_command(
             self.commands.CMD_MADCTL
@@ -85,6 +83,9 @@ class LCDDriver:
         self.send_data(0xC0)  # Corrected orientation
 
         self.send_command(self.commands.CMD_DISPON)  # Display On
+        time.sleep(0.1)
+        self.send_data(0x55)  # Use 0x56 for BGR565 instead of 0x55
+        self.send_command(ILI9340.CMD_COLMOD)
         time.sleep(0.1)
 
     def set_address_window(self, x0, y0, x1, y1):
