@@ -5,7 +5,6 @@ from lcd_driver import LCDDriver
 from const import ILI9340, Colors
 from gpio_handler import GPIOHandler
 from spi_handler import SPIHandler, PrioritySPILock
-from touch_handler import XPT2046
 
 # Create a single shared priority lock
 spi_lock = PrioritySPILock()
@@ -24,6 +23,8 @@ def touch_callback(coords):
 
 
 if __name__ == "__main__":
+    from touch_handler import XPT2046
+
     gpio = GPIOHandler()
     spi = SPIHandler(speed=32000000, spi_lock=spi_lock)
     lcd = LCDDriver(
@@ -38,10 +39,10 @@ if __name__ == "__main__":
 
     # Set callback and start listening for touch events in callback style.
     touch.set_callback(touch_callback)
-    touch.start_listening(interval=0.05)
+    touch.start_listening(interval=0.1)
 
     display_thread = threading.Thread(target=update_display, args=(lcd,), daemon=True)
-    display_thread.start()
+    # display_thread.start()
 
     try:
         while True:

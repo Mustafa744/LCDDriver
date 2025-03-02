@@ -34,10 +34,19 @@ class XPT2046:
 
     def _read_adc(self, command):
         GPIO.output(self.tp_cs, GPIO.LOW)
-        time.sleep(0.01)
-        raw = self.spi_handler.read(command, read_len=2)
+        time.sleep(0.01)  # Increase delay as in the working example
+        if self.spi_lock:
+            with self.spi_lock.touch_lock():
+                # Send command first, then read two bytes
+                self.spi_handler.transfer([command])
+                raw = self.spi_handler.transfer([0x00, 0x00])
+        else:
+            self.spi_handler.transfer([command])
+            raw = self.spi_handler.transfer([0x00, 0x00])
         GPIO.output(self.tp_cs, GPIO.HIGH)
+        # Combine the two bytes received into a 12-bit ADC value
         adc_val = ((raw[0] << 8) | raw[1]) >> 3
+        print(f"ADC Value: {adc_val}")
         return adc_val
 
     def get_touch_coordinates(self):
