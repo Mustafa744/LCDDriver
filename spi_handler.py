@@ -24,6 +24,16 @@ class SPIHandler:
                 break
             with self.spi_lock:
                 if task["type"] == "write":
+                    data = task["data"]
+                    if isinstance(data, int):
+                        data = [data]
+                    elif isinstance(data, (bytes, bytearray)):
+                        data = list(data)
+
+                    elif isinstance(data, list):
+                        data = [int(x) for x in data]
+                    else:
+                        raise ValueError("Invalid data type for SPI write")
                     self.spi.xfer2(task["data"])
                 elif task["type"] == "read":
                     task["result"].append(
