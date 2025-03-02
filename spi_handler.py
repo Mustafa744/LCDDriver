@@ -35,6 +35,8 @@ class SPIHandler:
                         raise ValueError("Invalid data type for SPI write")
                     if data:  # Only transfer non-empty data list
                         self.spi.xfer2(data)
+                    else:
+                        print("Empty data list for SPI write")
                 elif task["type"] == "read":
                     # Ensure data is a non-empty list and convert if needed
                     data = task["data"]
