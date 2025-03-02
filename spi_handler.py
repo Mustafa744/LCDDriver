@@ -57,6 +57,7 @@ class SPIHandler:
     def write(self, data):
         """Queues a write operation."""
         self.spi_queue.put({"type": "write", "data": data})
+        self.spi_queue.join()
 
     def read(self, data):
         """Queues a read operation and returns the result."""
