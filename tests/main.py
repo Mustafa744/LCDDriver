@@ -56,3 +56,12 @@ time.sleep(0.1)
 send_command(ILI9340.CMD_COLMOD)
 send_data(0x55)
 time.sleep(0.1)
+
+# Full red screen
+send_command(ILI9340.CMD_CASET)
+send_data([0x00, 0x00, 0x00, 0xEF])
+send_command(ILI9340.CMD_RASET)
+send_data([0x00, 0x00, 0x01, 0x3F])
+send_command(ILI9340.CMD_RAMWR)
+send_data([ILI9340.Colors.RED] * (240 * 320))
+
