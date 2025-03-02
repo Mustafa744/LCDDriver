@@ -1,146 +1,121 @@
-#
-from gpio_handler import GPIOHandler
-from spi_handler import SPIHandler
-import RPi.GPIO as GPIO
-from const import ILI9340
 import time
-import numpy as np
-from PIL import Image
+import RPi.GPIO as GPIO
 
 
 class DisplayHandler:
-    def rgb2RGB565(r, g, b):
-        return ((b & 0xF8) << 8) | ((g & 0xFC) << 3) | (r >> 3)
-
-    def __init__(
-        self,
-        gpio_handler: GPIOHandler = None,
-        spi_handler: SPIHandler = None,
-        commands=None,
-        width: int = 240,
-        height: int = 320,
-    ):
-        self.width = width
-        self.height = height
-        self.spi = spi_handler
+    def __init__(self, gpio_handler, spi_handler, commands):
         self.gpio = gpio_handler
+        self.spi = spi_handler
         self.commands = commands
+
+        # Pin definitions
         self.LCD_RS = self.gpio.rs_pin
         self.LCD_CS = self.gpio.cs_pin
         self.LCD_RST = self.gpio.rst_pin
-        self.spi_lock = spi_handler.spi_lock
+
+        # Display dimensions
+        self.width = 240
+        self.height = 320
+
+        # Lock from SPI handler if present
+        self.spi_lock = getattr(self.spi, "spi_lock", None)
 
     def send_command(self, cmd):
-        self.gpio.set_pin(self.gpio.rs_pin, GPIO.LOW)  # Command mode
-        self.gpio.set_pin(self.gpio.cs_pin, GPIO.LOW)
+        """Send a command to the display."""
+        self.gpio.set_pin(self.LCD_RS, GPIO.LOW)  # Command mode
+        self.gpio.set_pin(self.LCD_CS, GPIO.LOW)
         self.spi.write([cmd])
-        self.gpio.set_pin(self.gpio.cs_pin, GPIO.HIGH)
+        self.gpio.set_pin(self.LCD_CS, GPIO.HIGH)
 
     def send_data(self, data):
-        self.gpio.set_pin(self.gpio.rs_pin, GPIO.HIGH)  # Data mode
-        self.gpio.set_pin(self.gpio.cs_pin, GPIO.LOW)
+        """Send data to the display."""
+        self.gpio.set_pin(self.LCD_RS, GPIO.HIGH)  # Data mode
+        self.gpio.set_pin(self.LCD_CS, GPIO.LOW)
+
         if isinstance(data, list):
             self.spi.write(data)
         else:
             self.spi.write([data])
-        self.gpio.set_pin(self.gpio.cs_pin, GPIO.HIGH)
 
-    def reset_display(self):
+        self.gpio.set_pin(self.LCD_CS, GPIO.HIGH)
+
+    def init_display(self):
+        """Initialize the display with required settings."""
+        # Reset display first
         self.gpio.set_pin(self.LCD_RST, GPIO.LOW)
         time.sleep(0.1)
         self.gpio.set_pin(self.LCD_RST, GPIO.HIGH)
         time.sleep(0.1)
 
-    def init_display(self):
+        # Software reset
         self.send_command(self.commands.CMD_SWRESET)
         time.sleep(0.1)
+
+        # Exit sleep mode
         self.send_command(self.commands.CMD_SLPOUT)
         time.sleep(0.1)
-        self.send_command(ILI9340.CMD_COLMOD)
+
+        # Set color mode
+        self.send_command(self.commands.CMD_COLMOD)
+
+        # Set memory access control
         self.send_command(self.commands.CMD_MADCTL)
-        self.send_data(0xC0)
+        self.send_data(0xC0)  # Match the working configuration
+
+        # Turn on display
         self.send_command(self.commands.CMD_DISPON)
         time.sleep(0.1)
-        self.send_data(0x55)
+
+        # Set color mode to 16-bit (565 RGB)
+        self.send_command(self.commands.CMD_COLMOD)
+        self.send_data(0x55)  # 16-bit color
         time.sleep(0.1)
 
     def set_address_window(self, x0, y0, x1, y1):
+        """Set the address window for drawing."""
+        # Column address set
         self.send_command(self.commands.CMD_CASET)
-        self.send_data([x0 >> 8, x0 & 0xFF, x1 >> 8, x1 & 0xFF])
+        self.send_data([0x00, x0, 0x00, x1])  # Start and end column
+
+        # Row address set
         self.send_command(self.commands.CMD_RASET)
-        self.send_data([y0 >> 8, y0 & 0xFF, y1 >> 8, y1 & 0xFF])
+        self.send_data([0x00, y0, 0x00, y1])  # Start and end row
+
+        # Write to RAM
         self.send_command(self.commands.CMD_RAMWR)
 
     def fill_screen(self, color):
-        self.set_address_window(0, 0, self.width - 1, self.height - 1)
-        n_pixels = self.width * self.height
+        """Fill the entire screen with a single color."""
+        # Set address window to entire screen
+        self.send_command(self.commands.CMD_CASET)
+        self.send_data([0x00, 0x00, 0x00, 0xEF])  # Column address set (0-239)
+
+        self.send_command(self.commands.CMD_RASET)
+        self.send_data([0x00, 0x00, 0x01, 0x3F])  # Row address set (0-319)
+
+        self.send_command(self.commands.CMD_RAMWR)
+
+        # Create color bytes (high byte, low byte pattern)
         high_byte = (color >> 8) & 0xFF
         low_byte = color & 0xFF
-        pixel_bytes = np.empty(n_pixels * 2, dtype=np.uint8)
-        pixel_bytes[0::2] = high_byte
-        pixel_bytes[1::2] = low_byte
-        data_list = pixel_bytes.tolist()
 
+        # Calculate pixel count for entire screen
+        pixels = [high_byte, low_byte] * (self.width * self.height)
+
+        # Send in chunks to avoid buffer issues
         chunk_size = 4096
-        for i in range(0, len(data_list), chunk_size):
-            self.send_data(data_list[i : i + chunk_size])
+        for i in range(0, len(pixels), chunk_size):
+            self.send_data(pixels[i : i + chunk_size])
 
-    def fill_rectangle(self, x0, y0, x1, y1, color):
-        self.set_address_window(x0, y0, x1, y1)
+    def draw_pixel(self, x, y, color):
+        """Draw a single pixel at the specified position."""
+        if x < 0 or x >= self.width or y < 0 or y >= self.height:
+            return  # Out of bounds
 
-        width = x1 - x0 + 1
-        height = y1 - y0 + 1
-        pixel_data = [color >> 8, color & 0xFF] * (width * height)
+        # Set address window to the pixel
+        self.set_address_window(x, y, x, y)
 
-        # Send pixel data in chunks (SPI buffer limit)
-        chunk_size = 4096
-        for i in range(0, len(pixel_data), chunk_size):
-            self.send_data(pixel_data[i : i + chunk_size])
-
-    def plot_image(self, x0, y0, x1, y1, image_path):
-        print("Plotting image...")
-        # Open the image and convert to RGB
-        image = Image.open(image_path).convert("RGB")
-
-        # Resize the image to fit the specified window
-        image = image.resize((x1 - x0 + 1, y1 - y0 + 1))
-
-        # Rotate the image 180 degrees
-        image = image.rotate(180)
-
-        # Convert image to a NumPy array
-        pixel_data = np.array(image)
-
-        # Vectorized conversion to RGB565 with swapped red and blue channels:
-        # (r, g, b) -> ((b & 0xF8) << 8) | ((g & 0xFC) << 3) | (r >> 3)
-        r = pixel_data[:, :, 0]
-        g = pixel_data[:, :, 1]
-        b = pixel_data[:, :, 2]
-        rgb565 = (
-            (((b & 0xF8).astype(np.uint16)) << 8)
-            | (((g & 0xFC).astype(np.uint16)) << 3)
-            | ((r >> 3).astype(np.uint16))
-        )
-
-        # Split the 16-bit RGB565 value into high and low bytes
-        high_bytes = (rgb565 >> 8) & 0xFF
-        low_bytes = rgb565 & 0xFF
-
-        # Interleave the high and low bytes
-        pixel_bytes = np.empty(rgb565.size * 2, dtype=np.uint8)
-        pixel_bytes[0::2] = high_bytes.flatten()
-        pixel_bytes[1::2] = low_bytes.flatten()
-        data_list = pixel_bytes.tolist()
-
-        self.set_address_window(x0, y0, x1, y1)
-
-        # Send the data in chunks (SPI buffer limit)
-        chunk_size = 4096
-        for i in range(0, len(data_list), chunk_size):
-            self.send_data(data_list[i : i + chunk_size])
-
-        print("Image plotted successfully!")
-
-    def cleanup(self):
-        self.spi.close()
-        self.gpio.cleanup()
+        # Send color
+        high_byte = (color >> 8) & 0xFF
+        low_byte = color & 0xFF
+        self.send_data([high_byte, low_byte])
