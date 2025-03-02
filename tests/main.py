@@ -1,7 +1,7 @@
 # Python
 import time
 from test_spi import SPIHandler
-from gpio_handler import GPIOHandler
+from GpioHandler import GPIOHandler
 from const import ILI9340
 
 # Create handlers
