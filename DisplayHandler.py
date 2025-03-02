@@ -31,24 +31,19 @@ class DisplayHandler:
         self.spi_lock = spi_handler.spi_lock
 
     def send_command(self, cmd):
-        self.gpio.set_pin(self.LCD_RS, GPIO.LOW)  # Command mode
-        self.gpio.set_pin(self.LCD_CS, GPIO.LOW)
-
+        self.gpio.set_pin(self.gpio.rs_pin, GPIO.LOW)  # Command mode
+        self.gpio.set_pin(self.gpio.cs_pin, GPIO.LOW)
         self.spi.write([cmd])
-        self.gpio.set_pin(self.LCD_CS, GPIO.HIGH)
+        self.gpio.set_pin(self.gpio.cs_pin, GPIO.HIGH)
 
     def send_data(self, data):
-        self.gpio.set_pin(self.LCD_RS, GPIO.HIGH)  # Data mode
-        self.gpio.set_pin(self.LCD_CS, GPIO.LOW)
-
-        # Add this conditional block to handle locking properly
-        if self.spi_lock:
-            with self.spi_lock:
-                self.spi.write(data)
-        else:
+        self.gpio.set_pin(self.gpio.rs_pin, GPIO.HIGH)  # Data mode
+        self.gpio.set_pin(self.gpio.cs_pin, GPIO.LOW)
+        if isinstance(data, list):
             self.spi.write(data)
-
-        self.gpio.set_pin(self.LCD_CS, GPIO.HIGH)
+        else:
+            self.spi.write([data])
+        self.gpio.set_pin(self.gpio.cs_pin, GPIO.HIGH)
 
     def reset_display(self):
         self.gpio.set_pin(self.LCD_RST, GPIO.LOW)
@@ -57,17 +52,15 @@ class DisplayHandler:
         time.sleep(0.1)
 
     def init_display(self):
-        self.reset_display()
         self.send_command(self.commands.CMD_SWRESET)
         time.sleep(0.1)
         self.send_command(self.commands.CMD_SLPOUT)
         time.sleep(0.1)
-        self.send_command(self.commands.CMD_COLMOD)
+        self.send_command(ILI9340.CMD_COLMOD)
         self.send_command(self.commands.CMD_MADCTL)
         self.send_data(0xC0)
         self.send_command(self.commands.CMD_DISPON)
         time.sleep(0.1)
-        self.send_command(ILI9340.CMD_COLMOD)
         self.send_data(0x55)
         time.sleep(0.1)
 
