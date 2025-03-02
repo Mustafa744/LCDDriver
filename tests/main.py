@@ -1,6 +1,6 @@
 # Python
 import time
-from spi_handler import SPIHandler
+from test_spi import SPIHandler
 from gpio_handler import GPIOHandler
 from const import ILI9340
 
@@ -19,7 +19,7 @@ time.sleep(0.1)
 def send_command(cmd):
     gpio.set_pin(gpio.rs_pin, 0)  # Command mode
     gpio.set_pin(gpio.cs_pin, 0)
-    spi.transfer([cmd])
+    spi.write([cmd])
     gpio.set_pin(gpio.cs_pin, 1)
 
 
@@ -27,9 +27,9 @@ def send_data(data):
     gpio.set_pin(gpio.rs_pin, 1)  # Data mode
     gpio.set_pin(gpio.cs_pin, 0)
     if isinstance(data, list):
-        spi.transfer(data)
+        spi.write(data)
     else:
-        spi.transfer([data])
+        spi.write([data])
     gpio.set_pin(gpio.cs_pin, 1)
 
 
