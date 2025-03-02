@@ -24,8 +24,8 @@ class ILI9340:
 
 
 class Colors:
-    RED = 0x001F
-    GREEN = 0x07E0
-    BLUE = 0xF800
-    WHITE = 0xFFFF
-    BLACK = 0x0000
+    RED = 0xF800  # Correctly positioned red bits
+    GREEN = 0x07E0  # This is correct
+    BLUE = 0x001F  # Correctly positioned blue bits
+    WHITE = 0xFFFF  # This is correct
+    BLACK = 0x0000  # This is correct
