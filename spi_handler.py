@@ -27,19 +27,29 @@ class SPIHandler:
                     data = task["data"]
                     if isinstance(data, (bytes, bytearray)):
                         data = list(data)
-
                     elif isinstance(data, int):
                         data = [data]
-
                     elif isinstance(data, list):
                         data = [int(x) for x in data]
                     else:
                         raise ValueError("Invalid data type for SPI write")
-                    self.spi.xfer2(task["data"])
+                    if data:  # Only transfer non-empty data list
+                        self.spi.xfer2(data)
                 elif task["type"] == "read":
-                    task["result"].append(
-                        self.spi.xfer2(task["data"])
-                    )  # Store the result
+                    # Ensure data is a non-empty list and convert if needed
+                    data = task["data"]
+                    if isinstance(data, (bytes, bytearray)):
+                        data = list(data)
+                    elif isinstance(data, int):
+                        data = [data]
+                    elif isinstance(data, list):
+                        data = [int(x) for x in data]
+                    else:
+                        raise ValueError("Invalid data type for SPI read")
+                    if data:
+                        task["result"].append(self.spi.xfer2(data))
+                    else:
+                        task["result"].append([])
             self.spi_queue.task_done()
 
     def write(self, data):
