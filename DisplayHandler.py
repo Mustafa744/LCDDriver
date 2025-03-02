@@ -40,7 +40,13 @@ class DisplayHandler:
     def send_data(self, data):
         self.gpio.set_pin(self.LCD_RS, GPIO.HIGH)  # Data mode
         self.gpio.set_pin(self.LCD_CS, GPIO.LOW)
-        self.spi.write(data)
+
+        # Add this conditional block to handle locking properly
+        if self.spi_lock:
+            with self.spi_lock:
+                self.spi.write(data)
+        else:
+            self.spi.write(data)
 
         self.gpio.set_pin(self.LCD_CS, GPIO.HIGH)
 
