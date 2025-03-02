@@ -25,10 +25,11 @@ class SPIHandler:
             with self.spi_lock:
                 if task["type"] == "write":
                     data = task["data"]
-                    if isinstance(data, int):
-                        data = [data]
-                    elif isinstance(data, (bytes, bytearray)):
+                    if isinstance(data, (bytes, bytearray)):
                         data = list(data)
+
+                    elif isinstance(data, int):
+                        data = [data]
 
                     elif isinstance(data, list):
                         data = [int(x) for x in data]
