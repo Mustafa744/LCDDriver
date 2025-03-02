@@ -24,7 +24,7 @@ def on_touch(coordinates):
         for dy in range(-2, 3):
             nx, ny = x + dx, y + dy
             if 0 <= nx < display.width and 0 <= ny < display.height:
-                display.draw_pixel(nx, ny, Colors.WHITE)
+                display.draw_pixel(nx, ny, Colors.BLUE)
 
 
 # Initialize touch controller
@@ -62,7 +62,7 @@ if __name__ == "__main__":
     time.sleep(0.1)
 
     # Fill screen with a color
-    display.fill_screen(Colors.BLUE)
+    display.fill_screen(Colors.GREEN)
     time.sleep(0.5)
 
     # Register touch callback
