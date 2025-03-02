@@ -41,11 +41,7 @@ class DisplayHandler:
         self.gpio.set_pin(self.LCD_RS, GPIO.HIGH)  # Data mode
         self.gpio.set_pin(self.LCD_CS, GPIO.LOW)
         if self.spi_lock:
-            with self.spi_lock.display_lock():
-                if isinstance(data, list):
-                    self.spi.write(data)
-                else:
-                    self.spi.write([data])
+            self.spi.write([data])
         else:
             if isinstance(data, list):
                 self.spi.write(data)
