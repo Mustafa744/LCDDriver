@@ -1,7 +1,7 @@
 #
 from gpio_handler import GPIOHandler
 from spi_handler import SPIHandler
-from RPi.GPIO import GPIO
+import RPi.GPIO as GPIO
 from const import ILI9340
 import time
 import numpy as np
