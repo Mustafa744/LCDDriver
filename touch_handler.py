@@ -1,6 +1,7 @@
 # Python
 import time
 import RPi.GPIO as GPIO
+import threading
 
 
 class XPT2046:
@@ -16,6 +17,7 @@ class XPT2046:
         y_max=3800,
     ):
         self.spi = spi_handler.spi
+        self.spi_handler = spi_handler
         self.spi_lock = spi_handler.spi_lock
         self.tp_cs = tp_cs
         GPIO.setmode(GPIO.BCM)
@@ -27,31 +29,20 @@ class XPT2046:
         self.x_max = x_max
         self.y_min = y_min
         self.y_max = y_max
+        self.callback = None
+        self.running = False
 
     def _read_adc(self, command):
         GPIO.output(self.tp_cs, GPIO.LOW)
         time.sleep(0.01)
-        if self.spi_lock:
-            with self.spi_lock.touch_lock():
-                self.spi.xfer2([command])
-                raw = self.spi.xfer2([0x00, 0x00])
-        else:
-            self.spi.xfer2([command])
-            raw = self.spi.xfer2([0x00, 0x00])
+        raw = self.spi_handler.read(command, read_len=2)
         GPIO.output(self.tp_cs, GPIO.HIGH)
         adc_val = ((raw[0] << 8) | raw[1]) >> 3
         return adc_val
 
-    def read_touch(self):
-        x_adc = self._read_adc(0xD0)
-        y_adc = self._read_adc(0x90)
-        return x_adc, y_adc
-
-    def map_value(self, value, from_min, from_max, to_min, to_max):
-        return to_min + (to_max - to_min) * (value - from_min) / (from_max - from_min)
-
     def get_touch_coordinates(self):
-        x, y = self.read_touch()
+        x = self._read_adc(0xD0)
+        y = self._read_adc(0x90)
         if self.x_min < x < self.x_max and self.y_min < y < self.y_max:
             screen_x = int(
                 self.map_value(x, self.x_min, self.x_max, self.screen_width, 0)
@@ -61,3 +52,25 @@ class XPT2046:
             )
             return screen_x, screen_y
         return None
+
+    def map_value(self, value, from_min, from_max, to_min, to_max):
+        return to_min + (to_max - to_min) * (value - from_min) / (from_max - from_min)
+
+    def set_callback(self, callback):
+        self.callback = callback
+
+    def start_listening(self, interval=0.05):
+        self.running = True
+        threading.Thread(
+            target=self._listen_loop, args=(interval,), daemon=True
+        ).start()
+
+    def stop_listening(self):
+        self.running = False
+
+    def _listen_loop(self, interval):
+        while self.running:
+            coords = self.get_touch_coordinates()
+            if coords and self.callback:
+                self.callback(coords)
+            time.sleep(interval)

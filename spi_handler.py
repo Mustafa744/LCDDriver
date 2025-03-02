@@ -58,8 +58,24 @@ class SPIHandler:
         self.spi.max_speed_hz = speed
         self.spi_lock = spi_lock
 
+    def write(self, data):
+        if self.spi_lock:
+            with self.spi_lock.display_lock():
+                self.spi.xfer2(data)
+        else:
+            self.spi.xfer2(data)
+
+    def read(self, command, read_len=2):
+        if self.spi_lock:
+            with self.spi_lock.touch_lock():
+                self.spi.xfer2([command])
+                return self.spi.xfer2([0] * read_len)
+        else:
+            self.spi.xfer2([command])
+            return self.spi.xfer2([0] * read_len)
+
     def transfer(self, data):
-        self.spi.xfer2(data)
+        return self.spi.xfer2(data)
 
     def close(self):
         self.spi.close()

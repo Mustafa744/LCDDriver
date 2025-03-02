@@ -19,12 +19,8 @@ def update_display(lcd):
         time.sleep(1)
 
 
-def read_touch(touch):
-    while True:
-        pos = touch.get_touch_coordinates()
-        if pos:
-            print(f"Touch detected at: {pos}")
-        time.sleep(0.01)
+def touch_callback(coords):
+    print(f"Touch detected at: {coords}")
 
 
 if __name__ == "__main__":
@@ -40,10 +36,11 @@ if __name__ == "__main__":
     touch = XPT2046(tp_cs=26, spi_handler=spi)
     lcd.init_display()
 
-    touch_thread = threading.Thread(target=read_touch, args=(touch,), daemon=True)
-    display_thread = threading.Thread(target=update_display, args=(lcd,), daemon=True)
+    # Set callback and start listening for touch events in callback style.
+    touch.set_callback(touch_callback)
+    touch.start_listening(interval=0.05)
 
-    touch_thread.start()
+    display_thread = threading.Thread(target=update_display, args=(lcd,), daemon=True)
     display_thread.start()
 
     try:
