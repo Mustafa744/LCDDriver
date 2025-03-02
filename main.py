@@ -7,24 +7,21 @@ from gpio_handler import GPIOHandler
 from spi_handler import SPIHandler, PrioritySPILock
 from touch_handler import XPT2046
 
-# Use the custom priority lock
+# Create a single shared priority lock
 spi_lock = PrioritySPILock()
 
 
 def update_display(lcd):
     while True:
-        with spi_lock.display_lock():
-            lcd.fill_screen(Colors.RED)
-        time.sleep(0.5)
-        with spi_lock.display_lock():
-            lcd.fill_screen(Colors.BLUE)
-        time.sleep(0.5)
+        lcd.fill_screen(Colors.RED)
+        time.sleep(1)
+        lcd.fill_screen(Colors.BLUE)
+        time.sleep(1)
 
 
 def read_touch(touch):
     while True:
-        with spi_lock.touch_lock():
-            pos = touch.get_touch_coordinates()
+        pos = touch.get_touch_coordinates()
         if pos:
             print(f"Touch detected at: {pos}")
         time.sleep(0.01)
@@ -40,14 +37,14 @@ if __name__ == "__main__":
         width=240,
         height=320,
     )
-    touch = XPT2046(tp_cs=26, spi=spi)
+    touch = XPT2046(tp_cs=26, spi_handler=spi)
     lcd.init_display()
 
-    display_thread = threading.Thread(target=update_display, args=(lcd,), daemon=True)
     touch_thread = threading.Thread(target=read_touch, args=(touch,), daemon=True)
+    display_thread = threading.Thread(target=update_display, args=(lcd,), daemon=True)
 
-    display_thread.start()
     touch_thread.start()
+    display_thread.start()
 
     try:
         while True:

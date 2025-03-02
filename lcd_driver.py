@@ -32,7 +32,7 @@ class LCDDriver:
         self.spi_lock = spi_handler.spi_lock
 
     def send_command(self, cmd):
-        self.gpio.set_pin(self.LCD_RS, GPIO.LOW)  # Command Mode
+        self.gpio.set_pin(self.LCD_RS, GPIO.LOW)  # Command mode
         self.gpio.set_pin(self.LCD_CS, GPIO.LOW)
         if self.spi_lock:
             with self.spi_lock.display_lock():
@@ -42,7 +42,7 @@ class LCDDriver:
         self.gpio.set_pin(self.LCD_CS, GPIO.HIGH)
 
     def send_data(self, data):
-        self.gpio.set_pin(self.LCD_RS, GPIO.HIGH)  # Data Mode
+        self.gpio.set_pin(self.LCD_RS, GPIO.HIGH)  # Data mode
         self.gpio.set_pin(self.LCD_CS, GPIO.LOW)
         if self.spi_lock:
             with self.spi_lock.display_lock():
@@ -57,7 +57,6 @@ class LCDDriver:
                 self.spi.transfer([data])
         self.gpio.set_pin(self.LCD_CS, GPIO.HIGH)
 
-    # ... (rest of the file remains unchanged)
     def reset_display(self):
         self.gpio.set_pin(self.LCD_RST, GPIO.LOW)
         time.sleep(0.1)
@@ -66,55 +65,41 @@ class LCDDriver:
 
     def init_display(self):
         self.reset_display()
-
-        self.send_command(self.commands.CMD_SWRESET)  # Software Reset
+        self.send_command(self.commands.CMD_SWRESET)
         time.sleep(0.1)
-
-        self.send_command(self.commands.CMD_SLPOUT)  # Sleep Out
+        self.send_command(self.commands.CMD_SLPOUT)
         time.sleep(0.1)
-
-        self.send_command(
-            self.commands.CMD_COLMOD
-        )  # Set Pixel Format to 16-bit (BGR565)
-
-        self.send_command(
-            self.commands.CMD_MADCTL
-        )  # Memory Access Control (Rotation Fix)
-        self.send_data(0xC0)  # Corrected orientation
-
-        self.send_command(self.commands.CMD_DISPON)  # Display On
+        self.send_command(self.commands.CMD_COLMOD)
+        self.send_command(self.commands.CMD_MADCTL)
+        self.send_data(0xC0)
+        self.send_command(self.commands.CMD_DISPON)
         time.sleep(0.1)
-        self.send_data(0x55)  # Use 0x56 for BGR565 instead of 0x55
         self.send_command(ILI9340.CMD_COLMOD)
+        self.send_data(0x55)
         time.sleep(0.1)
 
     def set_address_window(self, x0, y0, x1, y1):
-        self.send_command(self.commands.CMD_CASET)  # Column Address Set
+        self.send_command(self.commands.CMD_CASET)
         self.send_data([x0 >> 8, x0 & 0xFF, x1 >> 8, x1 & 0xFF])
-
-        self.send_command(self.commands.CMD_RASET)  # Row Address Set
+        self.send_command(self.commands.CMD_RASET)
         self.send_data([y0 >> 8, y0 & 0xFF, y1 >> 8, y1 & 0xFF])
-
-        self.send_command(self.commands.CMD_RAMWR)  # Prepare for pixel data
+        self.send_command(self.commands.CMD_RAMWR)
 
     def fill_screen(self, color):
         self.set_address_window(0, 0, self.width - 1, self.height - 1)
-
         n_pixels = self.width * self.height
         high_byte = (color >> 8) & 0xFF
         low_byte = color & 0xFF
-
-        # Create a NumPy array with interleaved high and low bytes
         pixel_bytes = np.empty(n_pixels * 2, dtype=np.uint8)
         pixel_bytes[0::2] = high_byte
         pixel_bytes[1::2] = low_byte
-
         data_list = pixel_bytes.tolist()
 
-        # Send pixel data in chunks (SPI buffer limit)
         chunk_size = 4096
         for i in range(0, len(data_list), chunk_size):
             self.send_data(data_list[i : i + chunk_size])
+
+    # Other methods (fill_rectangle, plot_image, cleanup) remain unchanged.
 
     def fill_rectangle(self, x0, y0, x1, y1, color):
         self.set_address_window(x0, y0, x1, y1)

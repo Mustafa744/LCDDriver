@@ -1,7 +1,6 @@
 # Python
 import time
 import RPi.GPIO as GPIO
-import spidev
 
 
 class XPT2046:
