@@ -100,13 +100,8 @@ if __name__ == "__main__":
         else:
             print("Calibration failed - using default values.")
 
-    # Start touch handler - use interrupt mode since IRQ is working
-    polling_mode = (
-        input("Use polling mode instead of interrupts? (y/n): ").lower() == "y"
-    )
-
     print("\nStarting touch handler...")
-    touch.start_listening(polling_mode=polling_mode)
+    touch.start_listening()  # No more polling_mode parameter
 
     print("\n=== Touch Screen Drawing Ready ===")
     print("- Touch screen to draw")
