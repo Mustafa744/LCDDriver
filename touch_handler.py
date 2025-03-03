@@ -204,26 +204,33 @@ class XPT2046:
 
     def _irq_handler(self, channel):
         """Handle IRQ pin interrupt."""
-        # Double-check that we're responding to LOW state
+        # IMPORTANT: The IRQ pin might already have returned to HIGH
+        # by the time this handler executes, especially if it's a short pulse
+        # So we should still attempt to read touch even if it's HIGH now
+
         current_state = GPIO.input(self.tp_irq)
-        if current_state != GPIO.LOW:
-            print(f"IRQ handler triggered but pin is {current_state} not LOW")
-            return
+        print(f"IRQ handler triggered with current pin state: {current_state}")
 
         # Basic debouncing
         current_time = time.time() * 1000  # Convert to ms
         if (current_time - self.last_touch_time) < self.debounce_ms:
+            print(
+                f"Debounce rejected touch (time since last: {current_time - self.last_touch_time}ms)"
+            )
             return
 
         self.last_touch_time = current_time
 
-        # Queue the touch event for processing
+        # Always try to read touch data even if IRQ is back to HIGH
+        # This handles quick pulses that may have already ended
         try:
-            # Read directly to confirm touch
             coords = self.get_touch()
             if coords:
-                self.touch_queue.put(True)
-                print(f"IRQ triggered - touch event queued. Direct read: {coords}")
+                # We got valid coordinates, so there was definitely a touch
+                self.touch_queue.put(coords)  # Store actual coordinates
+                print(f"Touch detected and queued: {coords}")
+            else:
+                print("IRQ triggered but couldn't read valid coordinates")
         except Exception as e:
             print(f"Error during IRQ handling: {e}")
 
@@ -231,17 +238,9 @@ class XPT2046:
         """Process touch events from the queue."""
         while self.running:
             try:
-                # Wait for events from the queue
-                # Use non-blocking get with timeout to be more responsive
-                got_event = self.touch_queue.get(timeout=0.05)
-                print(f"Touch event dequeued")
-
-                # Sleep briefly to let touch stabilize
-                time.sleep(0.01)
-
-                # Process the touch
-                coords = self.get_touch()
-                print(f"Touch coordinates read: {coords}")
+                # Wait for events from the queue - this now contains actual coordinates
+                coords = self.touch_queue.get(timeout=0.05)
+                print(f"Touch coordinates dequeued: {coords}")
 
                 # Execute callback if coordinates were obtained
                 if coords is not None and self.callback:
@@ -254,28 +253,17 @@ class XPT2046:
                         import traceback
 
                         traceback.print_exc()
-                else:
-                    if coords is None:
-                        print("No valid coordinates read")
-                    if self.callback is None:
-                        print("No callback function registered")
 
-                # Wait for release
+                # Wait for release - but don't block too long
                 wait_start = time.time()
-                irq_released = False
-                while time.time() - wait_start < 0.5:  # Max 500ms wait for release
+                while time.time() - wait_start < 0.5:  # Max 500ms wait
                     if GPIO.input(self.tp_irq) == GPIO.HIGH:
                         print("Touch released (IRQ HIGH)")
-                        irq_released = True
                         break
                     time.sleep(0.01)
 
-                if not irq_released:
-                    print("Touch release timeout - forcing continue")
-
                 # Mark task as done
                 self.touch_queue.task_done()
-                print("Touch task marked as done")
 
             except queue.Empty:
                 # This is normal, just continue
@@ -286,11 +274,11 @@ class XPT2046:
                     import traceback
 
                     traceback.print_exc()
-                    # Try to recover by marking task as done if possible
+                    # Try to recover
                     try:
                         self.touch_queue.task_done()
-                    except Exception as e2:
-                        print(f"Could not mark task as done: {e2}")
+                    except:
+                        pass
 
     def start_listening(self):
         """Start listening for touch interrupts."""
@@ -308,11 +296,15 @@ class XPT2046:
         try:
             # Remove any existing event detection first
             GPIO.remove_event_detect(self.tp_irq)
-            # Add the new event detection
+
+            # Add the new event detection - use shorter bouncetime
             GPIO.add_event_detect(
-                self.tp_irq, GPIO.FALLING, callback=self._irq_handler, bouncetime=50
+                self.tp_irq, GPIO.FALLING, callback=self._irq_handler, bouncetime=30
             )
             print("Touch handler started with interrupt detection")
+
+            # Also test the IRQ pin manually
+            print(f"Current IRQ pin state: {GPIO.input(self.tp_irq)}")
         except Exception as e:
             print(f"Failed to set up interrupt: {e}")
             self.running = False
