@@ -167,31 +167,62 @@ class XPT2046:
                 if self.polling_mode:
                     # In polling mode, check the IRQ pin directly
                     if GPIO.input(self.tp_irq) == GPIO.LOW:
+                        # Debug point 1: Polling mode touch detected
+                        print("Polling mode: Touch detected")
                         coords = self.get_touch()
                         if coords is not None and self.callback:
+                            # Debug point 2: Calling callback
+                            print(
+                                f"Polling mode: Calling callback with coords {coords}"
+                            )
                             self.callback(coords)
                     time.sleep(0.05)  # Poll at 20Hz
                 else:
                     # In interrupt mode, wait for events from the queue
-                    self.touch_queue.get(timeout=0.1)
+                    # Use non-blocking get with shorter timeout to be more responsive
+                    got_event = self.touch_queue.get(timeout=0.05)
+                    print(f"Touch event dequeued: {got_event}")
+
+                    # Sleep briefly to let touch stabilize
+                    time.sleep(0.01)
 
                     # Process the touch
                     coords = self.get_touch()
-                    if coords is not None and self.callback:
-                        print(f"Touch detected at {coords}")
-                        self.callback(coords)
+                    print(f"Touch coordinates read: {coords}")
 
-                    # Wait for release and mark task as done
-                    release_timeout = time.time() + 1.0  # 1 second max wait
-                    while (
-                        GPIO.input(self.tp_irq) == GPIO.LOW and time.sleep(0.01) is None
-                    ):
-                        if time.time() > release_timeout:
-                            print("Touch release timeout")
+                    # Execute callback if coordinates were obtained
+                    if coords is not None and self.callback:
+                        print(f"Executing callback with coords {coords}")
+                        try:
+                            self.callback(coords)
+                            print("Callback completed successfully")
+                        except Exception as e:
+                            print(f"Exception in callback: {e}")
+                            import traceback
+
+                            traceback.print_exc()
+                    else:
+                        if coords is None:
+                            print("No valid coordinates read")
+                        if self.callback is None:
+                            print("No callback function registered")
+
+                    # Wait for release
+                    wait_start = time.time()
+                    irq_released = False
+                    while time.time() - wait_start < 0.5:  # Max 500ms wait for release
+                        if GPIO.input(self.tp_irq) == GPIO.HIGH:
+                            print("Touch released (IRQ HIGH)")
+                            irq_released = True
                             break
+                        time.sleep(0.01)
+
+                    if not irq_released:
+                        print("Touch release timeout - forcing continue")
 
                     # Mark task as done
                     self.touch_queue.task_done()
+                    print("Touch task marked as done")
 
             except queue.Empty:
                 # This is normal in interrupt mode, just continue
@@ -205,8 +236,8 @@ class XPT2046:
                     # Try to recover by marking task as done if possible
                     try:
                         self.touch_queue.task_done()
-                    except:
-                        pass
+                    except Exception as e2:
+                        print(f"Could not mark task as done: {e2}")
 
     def start_listening(self, polling_mode=False):
         """
