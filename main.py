@@ -83,9 +83,9 @@ if __name__ == "__main__":
     print("Press Ctrl+C to exit")
 
     # Option to calibrate
-    do_calibrate = input("Calibrate the touch screen? (y/n): ").lower() == "y"
-    if do_calibrate:
-        touch.calibrate()
+    # do_calibrate = input("Calibrate the touch screen? (y/n): ").lower() == "y"
+    # if do_calibrate:
+    #     touch.calibrate()
 
     # First try interrupt mode
     touch_mode = input("Use polling mode instead of interrupts? (y/n): ").lower() == "y"
