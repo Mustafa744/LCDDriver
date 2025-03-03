@@ -2,15 +2,10 @@ import RPi.GPIO as GPIO
 import time
 import threading
 from queue import Queue
-import queue  # Add this import
+import queue
 
 
 class XPT2046:
-    """
-    Class for handling touch inputs from XPT2046 touch controller using interrupts.
-    This controller uses SPI to communicate and has an IRQ pin for touch detection.
-    """
-
     # Command constants for XPT2046
     CMD_X_POS = 0xD0  # X position command (12-bit mode)
     CMD_Y_POS = 0x90  # Y position command (12-bit mode)
@@ -30,21 +25,10 @@ class XPT2046:
         y_max=3900,
         rotate=False,
     ):
-        """
-        Initialize the touch controller.
+        # Set up GPIO mode right at the beginning
+        if GPIO.getmode() != GPIO.BCM:
+            GPIO.setmode(GPIO.BCM)
 
-        Args:
-            tp_cs: Touch panel chip select pin
-            tp_irq: Touch panel interrupt pin
-            spi_handler: SPI handler instance
-            screen_width: Width of the display in pixels
-            screen_height: Height of the display in pixels
-            x_min: Minimum raw X value
-            x_max: Maximum raw X value
-            y_min: Minimum raw Y value
-            y_max: Maximum raw Y value
-            rotate: Whether to rotate coordinates (swap X and Y)
-        """
         self.tp_cs = tp_cs
         self.tp_irq = tp_irq
         self.spi_handler = spi_handler
@@ -60,17 +44,21 @@ class XPT2046:
         self.y_max = y_max
 
         # Initialize touch panel CS pin
-        GPIO.setmode(GPIO.BCM)
         GPIO.setup(self.tp_cs, GPIO.OUT, initial=GPIO.HIGH)
 
         # Initialize touch panel IRQ pin as input with pull-up
         GPIO.setup(self.tp_irq, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+
+        # Read current IRQ state to verify setup
+        irq_state = GPIO.input(self.tp_irq)
+        print(f"Touch IRQ initial state: {irq_state} (HIGH=not touched, LOW=touched)")
 
         # For touch detection
         self.callback = None
         self.running = False
         self.touch_thread = None
         self.touch_queue = Queue()
+        self.polling_mode = False  # Add polling mode option
 
         # For debouncing
         self.last_touch_time = 0
@@ -94,7 +82,8 @@ class XPT2046:
                 self.spi_handler.write([command])
                 result = self.spi_handler.read([0x00, 0x00])
 
-            print(f"Touch ADC command:{command:02X}, result:{result}")
+            # Use debug print only during development
+            # print(f"Touch ADC command:{command:02X}, result:{result}")
         except Exception as e:
             print(f"SPI error in _read_adc: {e}")
         finally:
@@ -108,38 +97,22 @@ class XPT2046:
 
     def _get_touch_raw(self):
         """Get raw touch coordinates."""
-        # Take multiple samples for stability
-        samples = 3
-        x_samples = []
-        y_samples = []
+        # Check Z1/Z2 first to verify touch is happening
+        z1 = self._read_adc(self.CMD_Z1_POS)
+        z2 = self._read_adc(self.CMD_Z2_POS)
 
-        for _ in range(samples):
-            x = self._read_adc(self.CMD_X_POS)
-            y = self._read_adc(self.CMD_Y_POS)
-            z1 = self._read_adc(self.CMD_Z1_POS)
-            z2 = self._read_adc(self.CMD_Z2_POS)
+        # Calculate touch pressure
+        z = z1 - z2
 
-            # Calculate touch pressure
-            z = z1 - z2
-
-            # Skip if no touch detected
-            if z < 100:
-                continue
-
-            x_samples.append(x)
-            y_samples.append(y)
-
-        # Return None if not enough samples
-        if len(x_samples) < samples / 2:
+        # If no significant pressure, return None
+        if z < 100:
             return None
 
-        # Filter out outliers (simple median filter)
-        x_samples.sort()
-        y_samples.sort()
-        median_x = x_samples[len(x_samples) // 2]
-        median_y = y_samples[len(y_samples) // 2]
+        # Now read X/Y coordinates
+        x = self._read_adc(self.CMD_X_POS)
+        y = self._read_adc(self.CMD_Y_POS)
 
-        return median_x, median_y
+        return x, y
 
     def get_touch(self):
         """Get calibrated touch coordinates."""
@@ -149,8 +122,10 @@ class XPT2046:
 
         raw_x, raw_y = raw
 
+        # Debug print raw values
+        # print(f"Raw touch: x={raw_x}, y={raw_y}")
+
         # Apply calibration and convert to screen coordinates
-        # Note: Some displays have inverted coordinates
         x = int((raw_x - self.x_min) * self.screen_width / (self.x_max - self.x_min))
         y = int((raw_y - self.y_min) * self.screen_height / (self.y_max - self.y_min))
 
@@ -170,6 +145,10 @@ class XPT2046:
 
     def _irq_handler(self, channel):
         """Handle IRQ pin interrupt."""
+        # Double-check that we're responding to LOW state
+        if GPIO.input(self.tp_irq) != GPIO.LOW:
+            return
+
         # Basic debouncing
         current_time = time.time() * 1000  # Convert to ms
         if (current_time - self.last_touch_time) < self.debounce_ms:
@@ -177,58 +156,70 @@ class XPT2046:
 
         self.last_touch_time = current_time
 
-        # If IRQ pin is LOW, touch is detected
-        if GPIO.input(self.tp_irq) == GPIO.LOW:
-            # Queue the touch event for processing
-            self.touch_queue.put(True)
+        # Queue the touch event for processing
+        self.touch_queue.put(True)
+        print("IRQ triggered - touch event queued")
 
     def _touch_processor(self):
         """Process touch events from the queue."""
         while self.running:
-            # Wait for a touch event or timeout
             try:
-                # Non-blocking to allow clean shutdown
-                self.touch_queue.get(timeout=0.1)
+                if self.polling_mode:
+                    # In polling mode, check the IRQ pin directly
+                    if GPIO.input(self.tp_irq) == GPIO.LOW:
+                        coords = self.get_touch()
+                        if coords is not None and self.callback:
+                            self.callback(coords)
+                    time.sleep(0.05)  # Poll at 20Hz
+                else:
+                    # In interrupt mode, wait for events from the queue
+                    self.touch_queue.get(timeout=0.1)
 
-                try:
-                    # Get the touch coordinates
+                    # Process the touch
                     coords = self.get_touch()
                     if coords is not None and self.callback:
-                        # Call the user's callback function with coordinates
+                        print(f"Touch detected at {coords}")
                         self.callback(coords)
 
-                    # Wait for IRQ to go high again (touch release)
-                    while GPIO.input(self.tp_irq) == GPIO.LOW and self.running:
-                        time.sleep(0.01)
+                    # Wait for release and mark task as done
+                    release_timeout = time.time() + 1.0  # 1 second max wait
+                    while (
+                        GPIO.input(self.tp_irq) == GPIO.LOW and time.sleep(0.01) is None
+                    ):
+                        if time.time() > release_timeout:
+                            print("Touch release timeout")
+                            break
 
-                    # Small delay to avoid rapid retriggering
-                    time.sleep(0.05)
-
-                except Exception as e:
-                    print(f"Touch processing detail error: {e.__class__.__name__}: {e}")
-                    import traceback
-
-                    traceback.print_exc()
-                finally:
-                    # Always mark the task as done
+                    # Mark task as done
                     self.touch_queue.task_done()
 
             except queue.Empty:
-                # This is normal, just continue the loop
+                # This is normal in interrupt mode, just continue
                 pass
             except Exception as e:
-                if self.running:  # Only log errors if still running
-                    print(f"Touch queue error: {e.__class__.__name__}: {e}")
+                if self.running:
+                    print(f"Touch processing error: {e.__class__.__name__}: {e}")
                     import traceback
 
                     traceback.print_exc()
+                    # Try to recover by marking task as done if possible
+                    try:
+                        self.touch_queue.task_done()
+                    except:
+                        pass
 
-    def start_listening(self):
-        """Start listening for touch interrupts."""
+    def start_listening(self, polling_mode=False):
+        """
+        Start listening for touch events.
+
+        Args:
+            polling_mode: If True, poll the IRQ pin instead of using interrupts
+        """
         if self.touch_thread and self.touch_thread.is_alive():
             print("Touch handler is already running")
             return
 
+        self.polling_mode = polling_mode
         self.running = True
 
         # Start the touch processor thread
@@ -236,19 +227,33 @@ class XPT2046:
         self.touch_thread.daemon = True
         self.touch_thread.start()
 
-        # Add the interrupt handler
-        GPIO.add_event_detect(
-            self.tp_irq, GPIO.FALLING, callback=self._irq_handler, bouncetime=50
-        )
+        # Only add interrupt handler if not in polling mode
+        if not polling_mode:
+            try:
+                # Remove any existing event detection first
+                GPIO.remove_event_detect(self.tp_irq)
+                # Add the new event detection
+                GPIO.add_event_detect(
+                    self.tp_irq, GPIO.FALLING, callback=self._irq_handler, bouncetime=50
+                )
+                print("Touch handler started with interrupt detection")
+            except Exception as e:
+                print(f"Failed to set up interrupt: {e}")
+                print("Falling back to polling mode")
+                self.polling_mode = True
 
-        print("Touch handler started - waiting for touch events")
+        if self.polling_mode:
+            print("Touch handler started in polling mode")
 
     def stop_listening(self):
         """Stop listening for touch events."""
         self.running = False
 
-        # Remove the interrupt handler
-        GPIO.remove_event_detect(self.tp_irq)
+        # Remove interrupt handler if it was set
+        try:
+            GPIO.remove_event_detect(self.tp_irq)
+        except:
+            pass
 
         # Wait for thread to finish
         if self.touch_thread:
@@ -260,50 +265,61 @@ class XPT2046:
         """Interactive calibration routine."""
         print("\n=== Touch Calibration ===")
         print("Touch the upper-left corner of the screen...")
-        time.sleep(2)
 
         # Wait for touch
-        while GPIO.input(self.tp_irq) == GPIO.HIGH:
+        ul = None
+        attempts = 0
+        while ul is None and attempts < 30:
+            if GPIO.input(self.tp_irq) == GPIO.LOW:
+                print("Touch detected - reading coordinates...")
+                ul = self._get_touch_raw()
+                if ul is None:
+                    print("Failed to read upper-left - try again")
             time.sleep(0.1)
+            attempts += 1
 
-        ul = self._get_touch_raw()
+        if ul is None:
+            print("Calibration failed - couldn't detect touch in upper-left")
+            return False
+
         print(f"Upper-left raw value: {ul}")
-        time.sleep(1)
 
         # Wait for release
         while GPIO.input(self.tp_irq) == GPIO.LOW:
             time.sleep(0.1)
-        time.sleep(0.5)  # Debounce delay
 
         print("Now touch the lower-right corner of the screen...")
-        time.sleep(2)
+        time.sleep(1)
 
         # Wait for touch
-        while GPIO.input(self.tp_irq) == GPIO.HIGH:
+        lr = None
+        attempts = 0
+        while lr is None and attempts < 30:
+            if GPIO.input(self.tp_irq) == GPIO.LOW:
+                print("Touch detected - reading coordinates...")
+                lr = self._get_touch_raw()
+                if lr is None:
+                    print("Failed to read lower-right - try again")
             time.sleep(0.1)
+            attempts += 1
 
-        lr = self._get_touch_raw()
+        if lr is None:
+            print("Calibration failed - couldn't detect touch in lower-right")
+            return False
+
         print(f"Lower-right raw value: {lr}")
 
-        # Wait for release
-        while GPIO.input(self.tp_irq) == GPIO.LOW:
-            time.sleep(0.1)
+        # Update calibration values
+        self.x_min = min(ul[0], lr[0])
+        self.x_max = max(ul[0], lr[0])
+        self.y_min = min(ul[1], lr[1])
+        self.y_max = max(ul[1], lr[1])
 
-        if ul and lr:
-            # Update calibration values
-            self.x_min = min(ul[0], lr[0])
-            self.x_max = max(ul[0], lr[0])
-            self.y_min = min(ul[1], lr[1])
-            self.y_max = max(ul[1], lr[1])
-
-            print("\nCalibration values updated:")
-            print(f"X range: {self.x_min} - {self.x_max}")
-            print(f"Y range: {self.y_min} - {self.y_max}")
-            print("\nUse these values in your initialization:")
-            print(
-                f"x_min={self.x_min}, x_max={self.x_max}, y_min={self.y_min}, y_max={self.y_max}"
-            )
-            return True
-        else:
-            print("Calibration failed. Using default values.")
-            return False
+        print("\nCalibration values updated:")
+        print(f"X range: {self.x_min} - {self.x_max}")
+        print(f"Y range: {self.y_min} - {self.y_max}")
+        print("\nUse these values in your initialization:")
+        print(
+            f"x_min={self.x_min}, x_max={self.x_max}, y_min={self.y_min}, y_max={self.y_max}"
+        )
+        return True
