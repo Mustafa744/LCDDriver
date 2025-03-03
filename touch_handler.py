@@ -2,6 +2,7 @@ import RPi.GPIO as GPIO
 import time
 import threading
 from queue import Queue
+import queue  # Add this import
 
 
 class XPT2046:
@@ -18,7 +19,7 @@ class XPT2046:
 
     def __init__(
         self,
-        tp_cs=18,
+        tp_cs=7,
         tp_irq=17,
         spi_handler=None,
         screen_width=240,
@@ -84,18 +85,23 @@ class XPT2046:
 
         # Send command and read result
         result = None
-        if self.spi_lock:
-            with self.spi_lock:
+        try:
+            if self.spi_lock:
+                with self.spi_lock:
+                    self.spi_handler.write([command])
+                    result = self.spi_handler.read([0x00, 0x00])
+            else:
                 self.spi_handler.write([command])
                 result = self.spi_handler.read([0x00, 0x00])
-        else:
-            self.spi_handler.write([command])
-            result = self.spi_handler.read([0x00, 0x00])
 
-        GPIO.output(self.tp_cs, GPIO.HIGH)
+            print(f"Touch ADC command:{command:02X}, result:{result}")
+        except Exception as e:
+            print(f"SPI error in _read_adc: {e}")
+        finally:
+            GPIO.output(self.tp_cs, GPIO.HIGH)
 
         if result and len(result) >= 2:
-            # Combine the two bytes into a 12-bit ADC value (discard the lower 3 bits)
+            # Combine the two bytes into a 12-bit ADC value
             adc_val = ((result[0] << 8) | result[1]) >> 3
             return adc_val
         return 0
@@ -184,22 +190,38 @@ class XPT2046:
                 # Non-blocking to allow clean shutdown
                 self.touch_queue.get(timeout=0.1)
 
-                # Get the touch coordinates
-                coords = self.get_touch()
-                if coords is not None and self.callback:
-                    # Call the user's callback function with coordinates
-                    self.callback(coords)
+                try:
+                    # Get the touch coordinates
+                    coords = self.get_touch()
+                    if coords is not None and self.callback:
+                        # Call the user's callback function with coordinates
+                        self.callback(coords)
 
-                # Wait for IRQ to go high again (touch release)
-                while GPIO.input(self.tp_irq) == GPIO.LOW and self.running:
-                    time.sleep(0.01)
+                    # Wait for IRQ to go high again (touch release)
+                    while GPIO.input(self.tp_irq) == GPIO.LOW and self.running:
+                        time.sleep(0.01)
 
-                # Small delay to avoid rapid retriggering
-                time.sleep(0.05)
+                    # Small delay to avoid rapid retriggering
+                    time.sleep(0.05)
 
+                except Exception as e:
+                    print(f"Touch processing detail error: {e.__class__.__name__}: {e}")
+                    import traceback
+
+                    traceback.print_exc()
+                finally:
+                    # Always mark the task as done
+                    self.touch_queue.task_done()
+
+            except queue.Empty:
+                # This is normal, just continue the loop
+                pass
             except Exception as e:
                 if self.running:  # Only log errors if still running
-                    print(f"Touch processing error: {e}")
+                    print(f"Touch queue error: {e.__class__.__name__}: {e}")
+                    import traceback
+
+                    traceback.print_exc()
 
     def start_listening(self):
         """Start listening for touch interrupts."""
