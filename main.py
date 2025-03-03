@@ -79,12 +79,14 @@ if __name__ == "__main__":
         screen_height=320,
     )
 
-    # Short IRQ test
-    print("Testing IRQ pin...")
-    irq_state = GPIO.input(touch.tp_irq)
-    print(
-        f"Current IRQ state: {'LOW (touched)' if irq_state == GPIO.LOW else 'HIGH (not touched)'}"
-    )
+    # Test the SPI directly
+    print("Testing direct SPI communication...")
+    if hasattr(spi, "spi"):
+        # Use direct SPI for test if available
+        spi.spi.mode = 0  # Make sure we're in the correct mode for XPT2046
+        test_cmd = 0xD0  # X position command
+        test_result = spi.spi.xfer2([test_cmd, 0x00, 0x00])
+        print(f"Direct SPI test result: {test_result}")
 
     # Register touch callback
     touch.set_callback(on_touch)
