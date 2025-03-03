@@ -110,12 +110,12 @@ class XPT2046:
             if hasattr(self.spi_handler, "spi") and hasattr(
                 self.spi_handler.spi, "xfer2"
             ):
-                # Direct spidev access
-                tx_data = [command, 0x00, 0x00]
+                # Direct spidev access - IMPORTANT FIX: Changed from 3 bytes to 2 bytes
+                tx_data = [command, 0x00]  # Send command and one dummy byte
                 rx_data = self.spi_handler.spi.xfer2(tx_data)
-                if len(rx_data) >= 3:
-                    result[0] = rx_data[1]
-                    result[1] = rx_data[2]
+                if len(rx_data) >= 2:
+                    result = rx_data  # Store the full result for debugging
+                    # Note: First byte may be junk from sending the command
             else:
                 # Use SPI handler methods
                 if self.spi_lock:
@@ -132,8 +132,11 @@ class XPT2046:
             GPIO.output(self.tp_cs, GPIO.HIGH)
 
         if result and len(result) >= 2:
-            # Combine the two bytes into a 12-bit ADC value (discard the lower 3 bits)
-            adc_val = ((result[0] << 8) | result[1]) >> 3
+            # XPT2046 returns 12 bits of data in two bytes
+            # First byte contains high 7 bits (bit 7 is always 0)
+            # Second byte contains low 5 bits in high positions
+            adc_val = ((result[0] << 5) | (result[1] >> 3)) & 0xFFF
+            print(f"Command: {command:02X}, Raw bytes: {result}, ADC value: {adc_val}")
             return adc_val
         return 0
 
@@ -147,7 +150,7 @@ class XPT2046:
         z = z1 - z2
 
         # Only proceed if there's significant pressure
-        if z < 100:
+        if z < 10:
             return None
 
         # Now take multiple samples for X/Y for stability
@@ -205,34 +208,40 @@ class XPT2046:
     def _irq_handler(self, channel):
         """Handle IRQ pin interrupt."""
         # IMPORTANT: The IRQ pin might already have returned to HIGH
-        # by the time this handler executes, especially if it's a short pulse
-        # So we should still attempt to read touch even if it's HIGH now
+        # by the time this handler executes, especially if short pulse
 
-        current_state = GPIO.input(self.tp_irq)
-        print(f"IRQ handler triggered with current pin state: {current_state}")
-
+        # Don't check current state - trust that the interrupt occurred
         # Basic debouncing
         current_time = time.time() * 1000  # Convert to ms
         if (current_time - self.last_touch_time) < self.debounce_ms:
-            print(
-                f"Debounce rejected touch (time since last: {current_time - self.last_touch_time}ms)"
-            )
             return
 
         self.last_touch_time = current_time
 
-        # Always try to read touch data even if IRQ is back to HIGH
-        # This handles quick pulses that may have already ended
-        try:
-            coords = self.get_touch()
-            if coords:
-                # We got valid coordinates, so there was definitely a touch
-                self.touch_queue.put(coords)  # Store actual coordinates
-                print(f"Touch detected and queued: {coords}")
-            else:
-                print("IRQ triggered but couldn't read valid coordinates")
-        except Exception as e:
-            print(f"Error during IRQ handling: {e}")
+        # Add a small delay to let SPI bus stabilize
+        time.sleep(0.002)
+
+        # Try multiple attempts to read the touch data
+        max_attempts = 3
+        for attempt in range(max_attempts):
+            try:
+                coords = self.get_touch()
+                if coords:
+                    # We got valid coordinates
+                    self.touch_queue.put(coords)
+                    print(
+                        f"Touch detected and queued (attempt {attempt + 1}): {coords}"
+                    )
+                    return  # Success - exit the function
+                else:
+                    print(f"Attempt {attempt + 1}: Failed to read coordinates")
+            except Exception as e:
+                print(f"Error during touch read attempt {attempt + 1}: {e}")
+
+            # Short delay before retry
+            time.sleep(0.005)
+
+        print("Failed to read valid coordinates after multiple attempts")
 
     def _touch_processor(self):
         """Process touch events from the queue."""
