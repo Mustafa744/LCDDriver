@@ -49,7 +49,7 @@ class XPT2046:
         self.y_max = y_max
 
         # Initialize touch panel CS pin
-        GPIO.setup(self.tp_cs, GPIO.OUT, initial=GPIO.HIGH)
+        GPIO.setup(self.tp_cs, GPIO.OUT, initial=GPIO.LOW)
 
         # Initialize touch panel IRQ pin as input with pull-up
         GPIO.setup(self.tp_irq, GPIO.IN, pull_up_down=GPIO.PUD_UP)
